@@ -34,27 +34,26 @@ from src.utils.controladores.pid_controller import PIDController
 from src.utils.graficadores.izq_der import graficar_vel_izq_der
 from src.utils.controladores.pwm_manager import PWMManager
 from src.utils.controladores.pwm_manager import velocidad_a_pwm   
+from src.utils.controladores.uart_motor_controller import UARTMotorController
 import time
 from time import sleep
 import numpy as np
 import matplotlib.pyplot as plt
 plt.ion()  # Modo interactivo activado
 
-class UARTController:
-    def __init__(self, port):
-        self.port = port
-
-    def send(self, msg):
-        print(f"UART enviado: {msg}")
-
 def main():
     data_receiver = SensorReader(port=DATA_PORT, baudrate=BAUDRATE)
-    uart_controller = UARTController(port=DATA_PORT)
-    pwm_manager = PWMManager(uart_controller)
+    motor_controller = UARTMotorController(port=DATA_PORT, baudrate=BAUDRATE)
+    pwm_manager = PWMManager(motor_controller)
     filtro_angulo = FiltroMediaMovil(tamaño_ventana=MEDIA_MOVIL_VENTANA)
 
     if not data_receiver.connect():
         print(f"Error: No se pudo conectar al receptor de datos en {DATA_PORT}")
+        return
+    
+    if not motor_controller.connect():
+        print(f"Error: No se pudo conectar al controlador de motores en {DATA_PORT}")
+        data_receiver.disconnect()
         return
 
     graficador = TagPlotter()
@@ -76,7 +75,7 @@ def main():
     while True:
         print(f"\nCiclo #{ciclo+1}")
         distancias = obtener_distancias_uart(data_receiver, N_SENSORES)
-        valido = verificar_distancias(distancias, uart_controller)
+        valido = verificar_distancias(distancias, motor_controller)
 
         if valido:
             try:
@@ -101,7 +100,7 @@ def main():
                 if debe_corregir(angulo_relativo, umbral=UMBRAL):
                     correccion = pid.update(angulo_relativo)
                     correccion = np.clip(correccion, PID_SALIDA_MIN, PID_SALIDA_MAX)
-                    uart_controller.send(f"TURN:{correccion:.2f}")
+                    motor_controller.send_motor_command(int(correccion), int(-correccion))
                 else:
                     print(f"Corrección ignorada: ángulo de {angulo_relativo:.2f}° está dentro del umbral")
 
@@ -120,7 +119,7 @@ def main():
                     vel_izq, vel_der, giro_normalizado = calcular_velocidades_diferenciales(
                         v_lineal=velocidad_avance,
                         angulo_relativo=angulo_relativo,
-                        sensibilidad_giro=SENSIBILIDAD_GIRO_DIFERENCIAL,
+                        #sensibilidad_giro=SENSIBILIDAD_GIRO_DIFERENCIAL,
                         max_v=VELOCIDAD_DIFERENCIAL_MAXIMA
                     )
                     ##### PARA DIFERENCIAL #############################
@@ -157,6 +156,10 @@ def main():
         if NUM_CICLOS is not None and ciclo >= NUM_CICLOS:
             print(f"\nFinalizando ejecución tras {NUM_CICLOS} ciclos.")
             break
+    
+    # Desconectar controladores
+    data_receiver.disconnect()
+    motor_controller.disconnect()
 
 if __name__ == "__main__":
     main()

@@ -114,7 +114,7 @@ VELOCIDADES_ESCALONADAS = {
     4: 80.0,   # Entre 3 m y 4 m
     5: 100.0   # Entre 4 m y 5 m
 }
-DISTANCIA_MINIMA_PARADA = 0.5
+DISTANCIA_MINIMA_PARADA = 1
 VELOCIDAD_MAXIMA = 100.0  # A partir de 5 m
 
 # #################################################################
